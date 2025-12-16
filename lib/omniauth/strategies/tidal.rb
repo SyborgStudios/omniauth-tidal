@@ -29,6 +29,12 @@ module OmniAuth
 
       def raw_info
         @raw_info ||= access_token.get('https://api.tidal.com/v1/users/me').parsed
+      rescue ::OAuth2::Error => e
+        log(:error, "Failed to fetch user info: #{e.message}")
+        {}
+      rescue ::Faraday::Error => e
+        log(:error, "Network error fetching user info: #{e.message}")
+        {}
       end
 
       def callback_url

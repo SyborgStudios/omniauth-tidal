@@ -10,14 +10,16 @@ module OmniAuth
              authorize_url: 'https://login.tidal.com/authorize',
              token_url: 'https://auth.tidal.com/v1/oauth2/token'
 
-      uid { raw_info['userId'] }
+      option :pkce, true
+
+      uid{ raw_info.data.id }
 
       info do
         {
-          email: raw_info['email'],
-          name: raw_info['username'],
-          first_name: raw_info['firstName'],
-          last_name: raw_info['lastName']
+          email: raw_info.data.attributes.email,
+          username: raw_info.data.attributes.username,
+          country: raw_info.data.attributes.country,
+          email_verified: raw_info.data.attributes.email_verified
         }
       end
 
@@ -28,13 +30,7 @@ module OmniAuth
       end
 
       def raw_info
-        @raw_info ||= access_token.get('https://api.tidal.com/v1/users/me').parsed
-      rescue ::OAuth2::Error => e
-        log(:error, "Failed to fetch user info: #{e.message}")
-        {}
-      rescue ::Faraday::Error => e
-        log(:error, "Network error fetching user info: #{e.message}")
-        {}
+        @raw_info ||= access_token.get('https://openapi.tidal.com/v2/users/me').parsed
       end
 
       def callback_url

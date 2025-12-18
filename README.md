@@ -1,6 +1,6 @@
 # OmniAuth Tidal
 
-This gem provides a simple way to authenticate to the Tidal API using OmniAuth with OAuth2.
+This gem provides a simple way to authenticate to the Tidal API using OmniAuth with OAuth2. It supports PKCE (Proof Key for Code Exchange) for enhanced security and uses Tidal's OpenAPI v2 endpoints.
 
 ## Installation
 
@@ -30,7 +30,7 @@ Add the Tidal strategy to your OmniAuth middleware. In `config/initializers/omni
 
 ```ruby
 Rails.application.config.middleware.use OmniAuth::Builder do
-  provider :tidal, ENV['TIDAL_CLIENT_ID'], ENV['TIDAL_CLIENT_SECRET']
+  provider :tidal, ENV['TIDAL_CLIENT_ID'], ENV['TIDAL_CLIENT_SECRET'], scope: 'user.read ...' 
 end
 ```
 
@@ -38,7 +38,7 @@ end
 
 ```ruby
 use OmniAuth::Builder do
-  provider :tidal, ENV['TIDAL_CLIENT_ID'], ENV['TIDAL_CLIENT_SECRET']
+  provider :tidal, ENV['TIDAL_CLIENT_ID'], ENV['TIDAL_CLIENT_SECRET'], scope: 'user.read ...' 
 end
 ```
 
@@ -46,15 +46,31 @@ end
 
 You'll need to register your application with Tidal to get a client ID and client secret. Visit the [Tidal Developer Portal](https://developer.tidal.com/) to create an application.
 
+**Important:** Make sure to add your callback URL to your Tidal application settings. The default callback URL is:
+```
+http://localhost:3000/auth/tidal/callback
+```
+
+### Required Scopes
+
+This gem requires the following OAuth scopes:
+- `user.read` - Access to user profile information
+
+You can request additional scopes as needed:
+- `playback` - Control playback
+- `search.read` - Search for music content
+
 ### Additional Options
 
 You can pass additional options to customize the strategy:
 
 ```ruby
 provider :tidal, ENV['TIDAL_CLIENT_ID'], ENV['TIDAL_CLIENT_SECRET'],
-  scope: 'r_usr w_usr',
+  scope: 'user.read playback search.read',
   callback_path: '/auth/tidal/callback'
 ```
+
+**Note:** PKCE is enabled by default for enhanced security, as required by Tidal's OAuth2 implementation.
 
 ## Authentication Hash
 
@@ -63,12 +79,12 @@ After successful authentication, you'll receive an authentication hash with the 
 ```ruby
 {
   provider: 'tidal',
-  uid: '12345',
+  uid: '206794742',
   info: {
     email: 'user@example.com',
-    name: 'username',
-    first_name: 'John',
-    last_name: 'Doe'
+    username: 'johndoe',
+    country: 'US',
+    email_verified: true
   },
   credentials: {
     token: 'ACCESS_TOKEN',
@@ -78,11 +94,27 @@ After successful authentication, you'll receive an authentication hash with the 
   },
   extra: {
     raw_info: {
-      # Full user data from Tidal API
+      data: {
+        id: '206794742',
+        type: 'users',
+        attributes: {
+          username: 'johndoe',
+          email: 'user@example.com',
+          email_verified: true,
+          country: 'US'
+        }
+      }
     }
   }
 }
 ```
+
+### API Endpoints Used
+
+This gem uses the following Tidal API endpoints:
+- **Authorization**: `https://login.tidal.com/authorize`
+- **Token Exchange**: `https://auth.tidal.com/v1/oauth2/token`
+- **User Info**: `https://openapi.tidal.com/v2/users/me`
 
 ## Example Rails Controller
 
@@ -92,10 +124,11 @@ class SessionsController < ApplicationController
     auth = request.env['omniauth.auth']
     user = User.find_or_create_by(uid: auth['uid'], provider: auth['provider']) do |u|
       u.email = auth['info']['email']
-      u.name = auth['info']['name']
+      u.username = auth['info']['username']
+      u.country = auth['info']['country']
     end
     session[:user_id] = user.id
-    redirect_to root_path, notice: 'Signed in successfully'
+    redirect_to root_path, notice: 'Signed in with Tidal successfully'
   end
 
   def failure
